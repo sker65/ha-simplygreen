@@ -1,0 +1,41 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SimplyGreen customer portal",
+        "description": "Credentials for mein.simplygreen.de. The metering location ID (mliid) is detected automatically; if that fails, take it from the mliids parameter of the getLoadProfile request.",
+        "data": {
+          "username": "Username",
+          "password": "Password",
+          "mliid": "Metering location ID (mliid, optional)",
+          "backfill_days": "History to import on first run (days)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate SimplyGreen",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Login failed",
+      "cannot_connect": "Portal unreachable or unexpected response",
+      "mliid_required": "Metering location ID not found, please enter it manually"
+    },
+    "abort": {
+      "already_configured": "This metering location is already configured",
+      "reauth_successful": "Credentials updated"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "last_day": {
+        "name": "Grid import last day"
+      },
+      "last_point": {
+        "name": "Latest reading"
+      }
+    }
+  }
+}

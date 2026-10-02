@@ -1,0 +1,41 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SimplyGreen Kundenportal",
+        "description": "Zugangsdaten für mein.simplygreen.de. Die Messlokations-ID (mliid) wird automatisch gesucht; falls das scheitert, steht sie im Request getLoadProfile als mliids.",
+        "data": {
+          "username": "Benutzername",
+          "password": "Passwort",
+          "mliid": "Messlokations-ID (mliid, optional)",
+          "backfill_days": "Historie beim ersten Import (Tage)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "SimplyGreen neu anmelden",
+        "data": {
+          "password": "Passwort"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Anmeldung fehlgeschlagen",
+      "cannot_connect": "Portal nicht erreichbar oder unerwartete Antwort",
+      "mliid_required": "Messlokations-ID nicht gefunden – bitte manuell eintragen"
+    },
+    "abort": {
+      "already_configured": "Diese Messlokation ist bereits eingerichtet",
+      "reauth_successful": "Anmeldung aktualisiert"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "last_day": {
+        "name": "Netzbezug letzter Tag"
+      },
+      "last_point": {
+        "name": "Letzter Messwert"
+      }
+    }
+  }
+}

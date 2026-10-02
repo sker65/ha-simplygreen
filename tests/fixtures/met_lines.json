@@ -1,0 +1,19 @@
+[
+  {
+    "MecSDesc": "DE0000000000000000000000000000000 - 000000000000 - Mustermann Max",
+    "MecId": "00000000",
+    "DevNos": "1DZG0000000000,1EMH0000000000",
+    "Lines": [
+      {
+        "Type": "MLI",
+        "Desc": "Wirkarbeit Bezug (+) Lastgang",
+        "Timepattern": "ResOpt1,ResOpt2,ResOpt3,ResOpt4,ResOpt5",
+        "UniSDesc": "kWh",
+        "BsaKey": "Strom",
+        "MinClvDate": "01.01.2026 00:00",
+        "MaxClvDate": "01.10.2026 00:00",
+        "MliId": "1234567"
+      }
+    ]
+  }
+]
