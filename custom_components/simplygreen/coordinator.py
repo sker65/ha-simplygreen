@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.statistics import (
@@ -24,6 +24,7 @@ from .api import (
     series,
     to_intervals,
 )
+from .stats import chunks, energy_stats, first_hour, merge, price_stats, summarize, window_start
 from .const import (
     CONF_BACKFILL_DAYS,
     CONF_MLIID,
@@ -105,10 +106,9 @@ class SimplyGreenCoordinator(DataUpdateCoordinator[dict]):
     async def _async_update_data(self) -> dict:
         today = dt_util.now().date()
         last = await self._last_import()
-        if last is None:
-            start_day = today - timedelta(days=int(self._backfill_days))
-        else:
-            start_day = dt_util.as_local(last).date() - timedelta(days=REFETCH_DAYS)
+        start_day = window_start(
+            today, last, dt_util.get_default_time_zone(), int(self._backfill_days), REFETCH_DAYS
+        )
 
         _LOGGER.debug(
             "Update start: window %s..%s, last imported hour: %s",
@@ -117,21 +117,17 @@ class SimplyGreenCoordinator(DataUpdateCoordinator[dict]):
         energy: list = []
         price: list = []
         try:
-            day = start_day
-            while day <= today:
-                chunk_end = min(day + timedelta(days=6), today)
-                payload = await self.client.get_load_profile(self.mliid, day, chunk_end)
+            for chunk_start, chunk_end in chunks(start_day, today):
+                payload = await self.client.get_load_profile(self.mliid, chunk_start, chunk_end)
                 energy += to_intervals(series(payload, "Menge"))
                 price += to_intervals(series(payload, "EPEX"))
-                day = chunk_end + timedelta(days=1)
         except SimplyGreenAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except SimplyGreenError as err:
             raise UpdateFailed(str(err)) from err
 
-        # de-duplicate overlapping chunks
-        energy = sorted(dict(energy).items())
-        price = sorted(dict(price).items())
+        energy = merge(energy)
+        price = merge(price)
 
         if energy:
             await self._import(energy, price)
@@ -146,16 +142,11 @@ class SimplyGreenCoordinator(DataUpdateCoordinator[dict]):
         else:
             _LOGGER.debug("Update done: portal returned no energy data for the window")
 
-        return self._summary(energy, price)
+        return summarize(energy, price, dt_util.get_default_time_zone())
 
     async def _import(self, energy: list, price: list) -> None:
         names = _STAT_NAMES.get(self.hass.config.language.split("-")[0], _STAT_NAMES["en"])
-        e_hours = hourly(energy, "sum")
-        running = await self._sum_before(next(iter(e_hours)))
-        e_stats = []
-        for start, kwh in e_hours.items():
-            running += kwh
-            e_stats.append({"start": start, "state": round(running, 4), "sum": round(running, 4)})
+        e_stats = energy_stats(energy, await self._sum_before(first_hour(energy)))
         async_add_external_statistics(
             self.hass,
             _metadata(self.energy_id, names["energy"], "kWh", has_sum=True, mean=False),
@@ -163,38 +154,9 @@ class SimplyGreenCoordinator(DataUpdateCoordinator[dict]):
         )
 
         if price:
-            buckets: dict[datetime, list[float]] = {}
-            for start, eur_mwh in price:
-                buckets.setdefault(start.replace(minute=0, second=0, microsecond=0), []).append(eur_mwh / 10)
-            p_stats = [
-                {"start": h, "mean": round(sum(v) / len(v), 3), "min": round(min(v), 3), "max": round(max(v), 3)}
-                for h, v in sorted(buckets.items())
-            ]
+            p_stats = price_stats(price)
             async_add_external_statistics(
                 self.hass,
                 _metadata(self.price_id, names["price"], "ct/kWh", has_sum=False, mean=True),
                 p_stats,
             )
-
-    @staticmethod
-    def _summary(energy: list, price: list) -> dict:
-        """15-min profile of the most recent complete local day."""
-        by_day: dict[date, list] = {}
-        for start, kwh in energy:
-            by_day.setdefault(dt_util.as_local(start).date(), []).append((start, kwh))
-        complete = [d for d, v in by_day.items() if len(v) >= 92]  # 92/96/100 on DST days
-        if not complete:
-            return {"day": None, "last_point": energy[-1][0] + timedelta(minutes=15) if energy else None}
-        day = max(complete)
-        prices = dict(price)
-        rows = sorted(by_day[day])
-        total = sum(k for _, k in rows)
-        cost_ct = sum(k * prices[s] / 10 for s, k in rows if s in prices)
-        return {
-            "day": day,
-            "total_kwh": round(total, 3),
-            "avg_price_ct": round(cost_ct / total, 2) if total else None,
-            "intervals": [[dt_util.as_local(s).isoformat(), k] for s, k in rows],
-            "epex_ct": [[dt_util.as_local(s).isoformat(), round(prices[s] / 10, 3)] for s, _ in rows if s in prices],
-            "last_point": energy[-1][0] + timedelta(minutes=15),
-        }

@@ -17,8 +17,10 @@ pytest -q
 
 ## Regeln
 
-- `custom_components/simplygreen/api.py` bleibt frei von `homeassistant`-Imports (E1);
-  Protokoll- und Parse-Logik gehört dorthin und wird in `tests/` ohne HA getestet.
+- `custom_components/simplygreen/api.py` und `stats.py` bleiben frei von `homeassistant`-Imports (E1);
+  Protokoll-, Parse- und Rechenlogik (Abruffenster, Summenfortschreibung, Preis-Buckets,
+  Tageszusammenfassung) gehört dorthin und wird in `tests/` ohne HA getestet.
+  `coordinator.py` bleibt dünn: Daten holen, `stats`-Funktionen aufrufen, an HA übergeben.
 - Zeitstempel des Portals = Intervall-ENDE in lokaler Wanduhrzeit als UTC-Epoch (HANDOVER 2.3).
   Änderungen an `to_intervals` nur mit Test, inkl. Zeitumstellungstag.
 - Statistik-Import nur volle Stunden, tz-aware UTC; Metadaten mit `mean_type` und `unit_class` (E7).

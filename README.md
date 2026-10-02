@@ -126,3 +126,8 @@ Vor dem ersten Push in `custom_components/simplygreen/manifest.json` den Platzha
 - Inoffizielle Integration, keine Verbindung zu SimplyGreen/ENTEGA. Änderungen am
   Portal können sie jederzeit brechen.
 - Die Zugangsdaten liegen im Config Entry von Home Assistant (`.storage/core.config_entries`).
+- Diese Integration wurde mit Unterstützung von [Claude Code](https://claude.com/claude-code)
+  (KI-Assistent von Anthropic) geschrieben. Der Code wurde geprüft und gegen das echte
+  Portal und eine Home-Assistant-Testinstanz getestet, kann aber trotzdem Fehler
+  enthalten. Nutzung auf eigene Verantwortung.
+- Lizenz: [MIT](LICENSE).

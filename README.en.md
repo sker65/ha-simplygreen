@@ -126,3 +126,7 @@ Before the first push, replace the placeholder `OWNER` in
 - Unofficial integration, not affiliated with SimplyGreen/ENTEGA. Changes to the
   portal can break it at any time.
 - Credentials are stored in Home Assistant's config entry (`.storage/core.config_entries`).
+- This integration was written with the help of [Claude Code](https://claude.com/claude-code)
+  (an AI assistant by Anthropic). The code was reviewed and tested against the real portal
+  and a Home Assistant test instance, but it may still contain errors. Use at your own risk.
+- License: [MIT](LICENSE).

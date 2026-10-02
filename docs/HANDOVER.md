@@ -119,15 +119,17 @@ Umgesetzt in `api.to_intervals()`.
 ```
 custom_components/simplygreen/
   api.py          Portal-Client + reine Parse-Funktionen (ohne HA-Imports)
-  coordinator.py  DataUpdateCoordinator: Abruf, Statistik-Import, Tageszusammenfassung
+  stats.py        Reine Rechenlogik (ohne HA-Imports): Abruffenster, Summenfortschreibung,
+                  Preis-Buckets, Tageszusammenfassung
+  coordinator.py  DataUpdateCoordinator: Abruf, Import in den Recorder (ruft stats auf)
   sensor.py       2 Sensoren auf Basis der Tageszusammenfassung
   config_flow.py  Setup (User/Pass/mliid/Historie) + Re-Auth
   __init__.py     Setup des Config Entry, eigene aiohttp-Session mit Cookie-Jar
 ```
 
-**E1 – `api.py` ohne HA-Abhängigkeit.** Damit lassen sich Parsing und Protokoll
-ohne HA-Testumgebung testen (`tests/conftest.py` lädt die Datei direkt). Diese
-Trennung bitte beibehalten.
+**E1 – `api.py` und `stats.py` ohne HA-Abhängigkeit.** Damit lassen sich Parsing,
+Protokoll und Rechenlogik ohne HA-Testumgebung testen (`tests/conftest.py` lädt beide
+Module unter einem Stub-Paket, ohne `__init__.py`). Diese Trennung bitte beibehalten.
 
 **E2 – Eigene ClientSession mit `aiohttp.CookieJar()`.** Die geteilte HA-Session
 eignet sich nicht für Cookie-basierte Logins. Deshalb
@@ -182,10 +184,12 @@ unbekannt, und so ist es robuster.
 | Datei | Prüft |
 |---|---|
 | `tests/test_parsing.py` | Zeitstempel-Semantik an echten Daten, Stundensumme (0,308 kWh), Zeitumstellung (100 Intervalle, lückenlos), unvollständiger Tag, CSRF-Regex |
+| `tests/test_stats.py` | Abruffenster (Backfill, lokales Datum), Blöcke zu 7 Tagen, Zusammenführen, Summenfortschreibung, Zeitumstellungstage (25/23 Stunden), Preis-Buckets, Tageszusammenfassung inkl. gewichtetem Durchschnittspreis |
 | `tests/test_client.py` | Login, abgelehntes Passwort, `mliid`-Erkennung, Abruf, Neu-Login nach abgelaufener Session, gegen einen lokalen aiohttp-Mock |
 
-**Nicht getestet:** `coordinator.py`, `sensor.py`, `config_flow.py`. Das bräuchte
-`pytest-homeassistant-custom-component`. Kompiliert sind sie, die API-Signaturen
+**Bewusst nicht getestet:** `coordinator.py`, `sensor.py`, `config_flow.py`. Die Logik
+steckt in `stats.py`, der Rest ist dünne HA-Anbindung (Tests dafür bräuchten
+`pytest-homeassistant-custom-component`). Kompiliert sind sie, die API-Signaturen
 sind von Hand gegen HA 2026.9.2 geprüft. Zusätzlich lief die Integration in einer
 Docker-HA (`docker-compose.yml`): Setup, Abruf und Statistik-Import ohne Fehler im Log.
 
