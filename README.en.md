@@ -9,11 +9,6 @@ SimplyGreen is the new name of **ENTEGA Ökostrom dynamisch** (formerly the port
 `meineems.entega.de`). There is no official API. The integration uses the same AJAX
 calls as the portal's web interface.
 
-> **Status: draft / v0.1.0.** Login, fetching and parsing are tested against a mock
-> that replicates the behavior observed in the browser. The integration has not yet
-> been run against the real portal. See [docs/HANDOVER.md](docs/HANDOVER.md),
-> section "Unverifizierte Annahmen" (unverified assumptions).
-
 ## What the integration provides
 
 | What | ID | Content |
@@ -35,7 +30,8 @@ Attributes of *Netzbezug letzter Tag* (grid consumption, last day):
 
 **Why hourly?** Home Assistant stores long-term statistics only at hourly resolution.
 The 15-minute resolution is therefore only available through the sensor attributes,
-e.g. for a `custom:plotly-graph` chart (example below).
+e.g. for templates or custom cards. It cannot be shown with Home Assistant's
+standard cards.
 
 ## Installation
 
@@ -66,59 +62,48 @@ Then: *Settings → Devices & Services → Add Integration → SimplyGreen Lastg
 The design decisions, the observed portal protocol and open items are documented in
 **[docs/HANDOVER.md](docs/HANDOVER.md)**.
 
-## Dashboard examples
+## Showing the statistics
 
-Hourly comparison of your own measurement with the utility's data (built-in HA cards):
+The hourly values are **statistics, not entities**. They therefore don't appear on the
+device or in the history view. You can find them under *Developer tools → Statistics*
+and display them like this:
+
+- **"Statistics graph" card:** edit the dashboard → add card → *Statistics graph*, then
+  pick the statistic.
+- **Energy dashboard:** *Grid consumption* → choose the statistic as the source.
+
+Grid consumption per hour:
 
 ```yaml
 type: statistics-graph
-title: Netzbezug – HA vs. Versorger
-chart_type: bar
-period: hour
-days_to_show: 3
-stat_types: [change]
 entities:
-  - entity: sensor.strom_energy          # own meter reading head (example)
-    name: HA measurement
-  - entity: simplygreen:netzbezug_<mliid>
-    name: Utility
+  - simplygreen:netzbezug_<mliid>
+period: hour
+chart_type: bar
+stat_types:
+  - change
 ```
 
-15-minute load profile of the last day with EPEX price (requires
-[plotly-graph](https://github.com/dbuezas/lovelace-plotly-graph-card)):
+`change` shows the consumption per hour. Without it, the card shows the running
+**sum**, which only grows. It starts at 0 with the first imported value and is **not a
+meter reading**. It is only meaningful for differences.
+
+EPEX price per hour (mean, minimum, maximum):
 
 ```yaml
-type: custom:plotly-graph
-title: Load profile last day (15 min)
-config:
-  scrollZoom: false
+type: statistics-graph
 entities:
-  - entity: sensor.simplygreen_netzbezug_letzter_tag
-    name: Grid consumption
-    type: bar
-    unit_of_measurement: kWh
-    filters:
-      - fn: |
-          ({ meta }) => ({
-            xs: meta.intervals.map(r => new Date(r[0])),
-            ys: meta.intervals.map(r => r[1]),
-          })
-  - entity: sensor.simplygreen_netzbezug_letzter_tag
-    name: EPEX
-    yaxis: y2
-    unit_of_measurement: ct/kWh
-    line: { shape: hv }
-    filters:
-      - fn: |
-          ({ meta }) => ({
-            xs: meta.epex_ct.map(r => new Date(r[0])),
-            ys: meta.epex_ct.map(r => r[1]),
-          })
-hours_to_show: 48
+  - simplygreen:epex_<mliid>
+period: hour
+chart_type: line
+stat_types:
+  - mean
+  - min
+  - max
 ```
 
-> The plotly-graph example is untested. Please check the `fn` filter API (`meta` =
-> attributes of the current state) against the plotly-graph documentation.
+Replace `<mliid>` with the number that follows `simplygreen:netzbezug_` under
+*Developer tools → Statistics*.
 
 ## Development
 

@@ -1,6 +1,7 @@
 # Handover: SimplyGreen-Lastgang-Integration
 
-Stand: 02.10.2026, v0.1.0 (Entwurf). Dieses Dokument enthält alles, was **nicht
+Stand: v0.1.0. Das Portal-Protokoll wurde am 02.10.2026 per Reverse
+Engineering erfasst. Dieses Dokument enthält alles, was **nicht
 direkt im Code steht**: woher das Wissen über das Portal kommt, welche Teile
 beobachtet und welche angenommen sind, warum der Code so aufgebaut ist und was
 als Nächstes ansteht.
@@ -11,11 +12,11 @@ als Nächstes ansteht.
 
 - **Tarif:** SimplyGreen (früher *ENTEGA Ökostrom dynamisch*). Dynamischer Tarif,
   stündlich bzw. viertelstündlich an den EPEX-Day-Ahead-Preis gekoppelt.
-- **Seit 01.10.2026** meldet der Messstellenbetreiber (Smart Meter / iMSys) die
+- **Datenquelle:** Der Messstellenbetreiber (Smart Meter / iMSys) meldet die
   Verbrauchswerte an den Versorger. Im Portal sind sie im 15-min-, 1-h- und
   1-Tag-Raster abrufbar.
 - **Ziel:** Diese abrechnungsrelevanten Werte in Home Assistant bringen, um
-  1. die eigene Messung (Lesekopf am Zähler) mit den Abrechnungsdaten abzugleichen und
+  1. die eigene Messung (z. B. Lesekopf am Zähler) mit den Abrechnungsdaten abzugleichen und
   2. Verbrauch × EPEX-Preis auswerten zu können (später: tatsächliche Kosten).
 - **Recherche:** Es gibt keine fertige HA-Integration (geprüft im HACS-Store und im
   Web unter „SimplyGreen“, „ENTEGA Ökostrom dynamisch“, „meineems.entega.de“). Die
@@ -47,7 +48,7 @@ oder `page=expired`, gilt der Login als gescheitert.
 
 ```
 GET index.php?ajaxService=getLoadProfile&ajax=y
-    &startDate=01.10.2026        (TT.MM.JJJJ)
+    &startDate=01.10.2026        (TT.MM.JJJJ, Beispielwerte)
     &endDate=02.10.2026
     &resOpt=ResOpt1              (Auflösung, s. u.)
     &mliids=["<mliid>"]          (JSON-Array, URL-kodiert)
@@ -57,7 +58,7 @@ Header: x-csrf-token, x-requested-with: XMLHttpRequest, referer: …?page=loadpr
 
 | `resOpt` | Auflösung | Status |
 |---|---|---|
-| `ResOpt1` | 15 min | **beobachtet** (96 Werte für den 01.10.) |
+| `ResOpt1` | 15 min | **beobachtet** (96 Werte pro Tag) |
 | `ResOpt2` | 1 h | **beobachtet** (24 Werte) |
 | `ResOpt3` | 1 Tag | Annahme, nicht geprüft |
 
@@ -83,12 +84,12 @@ Antwort: JSON-Array mit zwei Serien:
 Die Zeitstempel sind **Intervall-Enden in lokaler Wanduhrzeit, kodiert als
 UTC-Epoch** (typisch für Highcharts mit `useUTC`):
 
-- Erster Wert für den 01.10.: `1790813700000` = „2026-10-01 00:15 UTC“, gemeint ist
-  das Intervall **00:00–00:15 Uhr Ortszeit**.
-- Letzter Wert: „2026-10-02 00:00“ = Intervall 23:45–24:00.
+- Erster Wert eines Tages (Beispiel `1790813700000` = „2026-10-01 00:15 UTC“):
+  gemeint ist das Intervall **00:00–00:15 Uhr Ortszeit**.
+- Letzter Wert eines Tages (Beispiel „2026-10-02 00:00“): Intervall 23:45–24:00.
 - Stundenwerte: erster Wert „01:00“ = Stunde 00:00–01:00.
 
-Belegt durch den Abgleich mit der eigenen HA-Messung (Abschnitt 6).
+Belegt durch den Abgleich mit einer eigenen Messung am Zähler (Portal und Lesekopf stimmen überein).
 Umgesetzt in `api.to_intervals()`.
 
 ### 2.4 Session-Ablauf
@@ -107,7 +108,7 @@ Umgesetzt in `api.to_intervals()`.
 | A1 | Login per Multipart-POST funktioniert auch ohne Browser-Header (`sec-ch-*`, User-Agent) | `api.login` | **Bestätigt 02.10.2026** (echter Lauf, ohne UA-Header). Erster echter Lauf; ggf. User-Agent setzen |
 | A2 | Nach dem Login ist der CSRF-Token auf `?page=loadprofile` gültig (bzw. bleibt der Login-Token gültig, Fallback) | `api.login` | **Bestätigt 02.10.2026** (getLoadProfile und getMetLines liefen mit dem Token) |
 | A3 | ~~mliid per Regex aus HTML~~ **Widerlegt 02.10.2026:** Der Regex fand nichts. Stattdessen liefert `ajaxService=getMetLines` die `MliId` (`Lines[]` mit `Type: "MLI"`) | `api.get_met_lines`, `api.parse_mliids` | Erledigt, Test mit anonymisierter Fixture |
-| A4 | `endDate` ist inklusive bzw. unkritisch. Bei `01.10.–02.10.` kamen am 02.10. nur Werte des 01.10. | `coordinator._async_update_data` | Abfrage mit älterem Zeitraum |
+| A4 | `endDate` ist inklusive bzw. unkritisch. Bei einer Abfrage „gestern bis heute“ kamen für den heutigen Tag keine Werte | `coordinator._async_update_data` | Abfrage mit älterem Zeitraum |
 | A5 | Abfragen über 7 Tage pro Request sind erlaubt | `coordinator` (Blockgröße 6+1 Tage) | Längeren Zeitraum testen; ggf. Limit des Portals finden |
 | A6 | Am 25.10.2026 (Ende der Sommerzeit) liefert das Portal 100 Werte und wiederholt die Wanduhr 02:15–03:00 | `api.to_intervals`, Test `test_dst_fall_back…` | **Am 26.10. die echte Antwort für den 25.10. prüfen** |
 | A7 | Kein Rate-Limit / keine Sperre bei Abruf alle 3 h | – | Beobachten |
@@ -185,60 +186,32 @@ unbekannt, und so ist es robuster.
 
 **Nicht getestet:** `coordinator.py`, `sensor.py`, `config_flow.py`. Das bräuchte
 `pytest-homeassistant-custom-component`. Kompiliert sind sie, die API-Signaturen
-sind von Hand gegen HA 2026.9.2 geprüft.
+sind von Hand gegen HA 2026.9.2 geprüft. Zusätzlich lief die Integration in einer
+Docker-HA (`docker-compose.yml`): Setup, Abruf und Statistik-Import ohne Fehler im Log.
 
-## 6. Kontext aus dem Einsatz (Installation des Autors)
+## 6. Roadmap / offene Punkte (priorisiert)
 
-- HA **2026.9.2**, *Home Assistant Container* (Docker), SQLite-Recorder (ca. 3 GB).
-- Eigene Messung: `sensor.strom_energy` (kWh, `total_increasing`, Auflösung
-  0,01 kWh) über einen Lesekopf am Zähler. Im Energie-Dashboard als Netzbezug
-  eingetragen, mit **festem Preis 0,3365 €/kWh**. Das passt nicht mehr zum
-  dynamischen Tarif (siehe Roadmap).
-- **Abgleich 01.10.2026:** Portal 0,308 kWh, HA 0,30 kWh. Die Werte stimmen überein.
-- **Zählerwechsel am 09.09.2026:** Der Lesekopf meldete kurz `0`, die Statistik
-  bekam einen Sprung von 1658 kWh. Behoben per `recorder/adjust_sum_statistics`
-  (−1657,91 kWh ab 09.09. 12:00 Uhr Ortszeit). Bei einem Vergleich von HA und
-  Versorger vor diesem Datum daran denken.
-- PV + Batterie (Deye): tagsüber ist der Netzbezug praktisch null. Bezug fällt vor
-  allem abends/nachts und bei großen Lasten (Wallbox) an. Die Werte sind deshalb
-  klein (wenige Wh pro 15 min), das ist zu erwarten.
-- Dashboard `lovelace-technik/power-consumption`: Panel-View mit `vertical-stack`
-  aus plotly-graph-Karten (Leistung der Verbraucher, Netzbezug 15 min/1 h/1 Tag aus
-  `sensor.strom_energy`). Bei allen ist `scrollZoom: false` gesetzt, weil das
-  Mausrad sonst zoomt statt die Seite zu scrollen. Neue plotly-Karten dort ebenfalls
-  mit `config: {scrollZoom: false}` anlegen.
-
-## 7. Roadmap / offene Punkte (priorisiert)
-
-1. **Erster echter Lauf**, Annahmen A1–A3 prüfen. Dafür das Debug-Logging einschalten:
-   ```yaml
-   logger:
-     logs:
-       custom_components.simplygreen: debug
-   ```
-   Achtung: Es gibt noch kaum `_LOGGER.debug`-Ausgaben. Sinnvoll wären URL, Status
-   und Antwortlänge, **niemals das Passwort oder den Cookie**.
-2. **Kosten-Statistik:** `simplygreen:kosten_<mliid>` in € je Stunde =
+1. **Kosten-Statistik:** `simplygreen:kosten_<mliid>` in € je Stunde =
    Σ(kWh × (EPEX + Aufschlag)). Der Aufschlag (Netzentgelte, Umlagen, Steuern,
    Marge) kommt per **Options Flow** in ct/kWh, ggf. mit MwSt.-Faktor. Damit lässt
    sich die Statistik als `stat_cost` im Energie-Dashboard nutzen.
-3. **Options Flow** für Historie, Aufschlag und Abrufintervall (derzeit nur über
+2. **Options Flow** für Historie, Aufschlag und Abrufintervall (derzeit nur über
    die Daten des Config Entry).
-4. **ResOpt3 (Tag) prüfen** und gegebenenfalls zur Plausibilisierung nutzen (Summe
+3. **ResOpt3 (Tag) prüfen** und gegebenenfalls zur Plausibilisierung nutzen (Summe
    der Tageswerte gegen die Summe der 15-min-Werte).
-5. **Zeitumstellung 25.10.2026 verifizieren** (A6) und die echte Antwort als
+4. **Zeitumstellung 25.10.2026 verifizieren** (A6) und die echte Antwort als
    Fixture ablegen.
-6. **Tests für den Coordinator** mit `pytest-homeassistant-custom-component`
+5. **Tests für den Coordinator** mit `pytest-homeassistant-custom-component`
    (Summenfortschreibung, Re-Import, Tageszusammenfassung).
-7. **`diagnostics.py`** mit geschwärzten Zugangsdaten und letzter Rohantwort,
+6. **`diagnostics.py`** mit geschwärzten Zugangsdaten und letzter Rohantwort,
    hilfreich für Issues.
-8. Optional: Preisvorschau. Das Portal liefert nur vergangene EPEX-Werte. Für die
+7. Optional: Preisvorschau. Das Portal liefert nur vergangene EPEX-Werte. Für die
    Zukunft gibt es eigene Integrationen (z. B. EPEX Spot, Nordpool), das bleibt
    außerhalb des Umfangs.
-9. Optional: HACS-Default-Repository und Brands-Eintrag (`ignore: brands` in CI
+8. Optional: HACS-Default-Repository und Brands-Eintrag (`ignore: brands` in CI
    entfernen).
 
-## 8. Sicherheit
+## 7. Sicherheit
 
 - Beim Reverse Engineering wurden curl-Befehle mit **gültigen Session-Cookies und
   CSRF-Tokens** kopiert. Diese Sessions sollten per Logout ungültig gemacht sein.

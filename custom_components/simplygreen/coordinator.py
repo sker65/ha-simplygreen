@@ -36,6 +36,13 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+# Statistic names are stored in the recorder metadata and cannot use translation files.
+_STAT_NAMES = {
+    "de": {"energy": "SimplyGreen Netzbezug", "price": "SimplyGreen EPEX-Preis"},
+    "en": {"energy": "SimplyGreen grid import", "price": "SimplyGreen EPEX price"},
+}
+
+
 def _metadata(statistic_id: str, name: str, unit: str, *, has_sum: bool, mean: bool) -> dict:
     meta = {
         "source": DOMAIN,
@@ -103,6 +110,10 @@ class SimplyGreenCoordinator(DataUpdateCoordinator[dict]):
         else:
             start_day = dt_util.as_local(last).date() - timedelta(days=REFETCH_DAYS)
 
+        _LOGGER.debug(
+            "Update start: window %s..%s, last imported hour: %s",
+            start_day, today, dt_util.as_local(last).isoformat() if last else "none (initial backfill)",
+        )
         energy: list = []
         price: list = []
         try:
@@ -124,10 +135,21 @@ class SimplyGreenCoordinator(DataUpdateCoordinator[dict]):
 
         if energy:
             await self._import(energy, price)
+            newest_hour = max(hourly(energy, "sum"))
+            _LOGGER.debug(
+                "Update done: %d energy / %d price intervals, newest data ends %s; %s",
+                len(energy), len(price),
+                dt_util.as_local(energy[-1][0] + timedelta(minutes=15)).isoformat(),
+                "no new hours since last run" if last and newest_hour <= last
+                else f"{int((newest_hour - last) / timedelta(hours=1)) if last else 'all'} new hour(s)",
+            )
+        else:
+            _LOGGER.debug("Update done: portal returned no energy data for the window")
 
         return self._summary(energy, price)
 
     async def _import(self, energy: list, price: list) -> None:
+        names = _STAT_NAMES.get(self.hass.config.language.split("-")[0], _STAT_NAMES["en"])
         e_hours = hourly(energy, "sum")
         running = await self._sum_before(next(iter(e_hours)))
         e_stats = []
@@ -136,7 +158,7 @@ class SimplyGreenCoordinator(DataUpdateCoordinator[dict]):
             e_stats.append({"start": start, "state": round(running, 4), "sum": round(running, 4)})
         async_add_external_statistics(
             self.hass,
-            _metadata(self.energy_id, "SimplyGreen Netzbezug", "kWh", has_sum=True, mean=False),
+            _metadata(self.energy_id, names["energy"], "kWh", has_sum=True, mean=False),
             e_stats,
         )
 
@@ -150,7 +172,7 @@ class SimplyGreenCoordinator(DataUpdateCoordinator[dict]):
             ]
             async_add_external_statistics(
                 self.hass,
-                _metadata(self.price_id, "SimplyGreen EPEX-Preis", "ct/kWh", has_sum=False, mean=True),
+                _metadata(self.price_id, names["price"], "ct/kWh", has_sum=False, mean=True),
                 p_stats,
             )
 

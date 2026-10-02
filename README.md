@@ -9,11 +9,6 @@ SimplyGreen ist der neue Name von **ENTEGA Ökostrom dynamisch** (früheres Port
 `meineems.entega.de`). Eine offizielle API gibt es nicht. Die Integration nutzt
 dieselben AJAX-Aufrufe wie die Weboberfläche des Portals.
 
-> **Status: Entwurf / v0.1.0.** Login, Abruf und Parsing sind gegen einen Mock
-> getestet, der das im Browser beobachtete Verhalten nachbildet. Gegen das
-> echte Portal ist die Integration noch nicht gelaufen. Siehe
-> [docs/HANDOVER.md](docs/HANDOVER.md), Abschnitt „Unverifizierte Annahmen“.
-
 ## Was die Integration liefert
 
 | Was | ID | Inhalt |
@@ -35,7 +30,8 @@ Attribute von *Netzbezug letzter Tag*:
 
 **Warum stündlich?** Home Assistant speichert Langzeitstatistiken nur stündlich.
 Die 15-Minuten-Auflösung gibt es deshalb nur über die Sensor-Attribute, z. B. für
-ein `custom:plotly-graph`-Diagramm (Beispiel unten).
+Templates oder eigene Karten. Mit den Standardkarten von Home Assistant lässt sie
+sich nicht darstellen.
 
 ## Installation
 
@@ -67,59 +63,48 @@ Danach: *Einstellungen → Geräte & Dienste → Integration hinzufügen → Sim
 Die Entwurfsentscheidungen, das beobachtete Portal-Protokoll und offene Punkte
 stehen in **[docs/HANDOVER.md](docs/HANDOVER.md)**.
 
-## Dashboard-Beispiele
+## Statistiken anzeigen
 
-Stündlicher Vergleich der eigenen Messung mit den Versorgerdaten (HA-Bordmittel):
+Die Stundenwerte sind **Statistiken, keine Entitäten**. Sie erscheinen deshalb nicht beim
+Gerät und nicht im Verlauf („History“). Du findest sie unter *Entwicklerwerkzeuge →
+Statistik* und kannst sie so anzeigen:
+
+- **Karte „Statistikdiagramm“:** Dashboard bearbeiten → Karte hinzufügen →
+  *Statistikdiagramm*, dann die Statistik auswählen.
+- **Energie-Dashboard:** *Netzbezug* → die Statistik als Quelle wählen.
+
+Netzbezug je Stunde:
 
 ```yaml
 type: statistics-graph
-title: Netzbezug – HA vs. Versorger
-chart_type: bar
-period: hour
-days_to_show: 3
-stat_types: [change]
 entities:
-  - entity: sensor.strom_energy          # eigener Zähler-Lesekopf (Beispiel)
-    name: HA-Messung
-  - entity: simplygreen:netzbezug_<mliid>
-    name: Versorger
+  - simplygreen:netzbezug_<mliid>
+period: hour
+chart_type: bar
+stat_types:
+  - change
 ```
 
-15-Minuten-Lastgang des letzten Tages mit EPEX-Preis (benötigt
-[plotly-graph](https://github.com/dbuezas/lovelace-plotly-graph-card)):
+`change` zeigt den Verbrauch je Stunde. Ohne diese Angabe zeigt die Karte die
+fortlaufende **Summe**, die nur wächst. Sie beginnt beim ersten importierten Wert bei 0
+und ist **kein Zählerstand**. Sie ist nur für Differenzen aussagekräftig.
+
+EPEX-Preis je Stunde (Mittel, Minimum, Maximum):
 
 ```yaml
-type: custom:plotly-graph
-title: Lastgang letzter Tag (15 min)
-config:
-  scrollZoom: false
+type: statistics-graph
 entities:
-  - entity: sensor.simplygreen_netzbezug_letzter_tag
-    name: Netzbezug
-    type: bar
-    unit_of_measurement: kWh
-    filters:
-      - fn: |
-          ({ meta }) => ({
-            xs: meta.intervals.map(r => new Date(r[0])),
-            ys: meta.intervals.map(r => r[1]),
-          })
-  - entity: sensor.simplygreen_netzbezug_letzter_tag
-    name: EPEX
-    yaxis: y2
-    unit_of_measurement: ct/kWh
-    line: { shape: hv }
-    filters:
-      - fn: |
-          ({ meta }) => ({
-            xs: meta.epex_ct.map(r => new Date(r[0])),
-            ys: meta.epex_ct.map(r => r[1]),
-          })
-hours_to_show: 48
+  - simplygreen:epex_<mliid>
+period: hour
+chart_type: line
+stat_types:
+  - mean
+  - min
+  - max
 ```
 
-> Das plotly-graph-Beispiel ist ungetestet. Die `fn`-Filter-API (`meta` =
-> Attribute des aktuellen Zustands) bitte gegen die plotly-graph-Doku prüfen.
+`<mliid>` ersetzt du durch die Zahl, die in *Entwicklerwerkzeuge → Statistik* hinter
+`simplygreen:netzbezug_` steht.
 
 ## Entwicklung
 

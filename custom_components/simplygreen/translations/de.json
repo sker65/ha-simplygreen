@@ -1,9 +1,10 @@
 {
+  "title": "SimplyGreen Lastgang",
   "config": {
     "step": {
       "user": {
         "title": "SimplyGreen Kundenportal",
-        "description": "Zugangsdaten für mein.simplygreen.de. Die Messlokations-ID (mliid) wird automatisch gesucht; falls das scheitert, steht sie im Request getLoadProfile als mliids.",
+        "description": "Zugangsdaten für mein.simplygreen.de. Die Messlokations-ID (mliid) wird nach dem Login automatisch ermittelt. Falls das scheitert, bitte manuell eintragen (Browser-Netzwerk-Tab: Parameter mliids des Requests getLoadProfile).",
         "data": {
           "username": "Benutzername",
           "password": "Passwort",

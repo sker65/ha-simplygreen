@@ -15,6 +15,13 @@ from .api import SimplyGreenAuthError, SimplyGreenClient, SimplyGreenError
 from .const import CONF_BACKFILL_DAYS, CONF_MLIID, DEFAULT_BACKFILL_DAYS, DOMAIN
 
 
+# Config entry titles are plain strings and cannot be translated by HA, so pick one here.
+_ENTRY_TITLES = {
+    "de": "SimplyGreen Messlokation {mliid}",
+    "en": "SimplyGreen metering location {mliid}",
+}
+
+
 class SimplyGreenConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
@@ -41,7 +48,9 @@ class SimplyGreenConfigFlow(ConfigFlow, domain=DOMAIN):
                     await self.async_set_unique_id(mliid)
                     self._abort_if_unique_id_configured()
                     return self.async_create_entry(
-                        title=f"SimplyGreen {mliid}",
+                        title=_ENTRY_TITLES.get(
+                            self.hass.config.language.split("-")[0], _ENTRY_TITLES["en"]
+                        ).format(mliid=mliid),
                         data={**user_input, CONF_MLIID: mliid},
                     )
 

@@ -1,9 +1,10 @@
 {
+  "title": "SimplyGreen Load Profile",
   "config": {
     "step": {
       "user": {
         "title": "SimplyGreen customer portal",
-        "description": "Credentials for mein.simplygreen.de. The metering location ID (mliid) is detected automatically; if that fails, take it from the mliids parameter of the getLoadProfile request.",
+        "description": "Credentials for mein.simplygreen.de. The metering location ID (mliid) is detected automatically after login. If that fails, enter it manually (browser network tab: parameter mliids of the getLoadProfile request).",
         "data": {
           "username": "Username",
           "password": "Password",

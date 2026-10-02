@@ -1,0 +1,19 @@
+# Disposable Home Assistant for testing the integration locally.
+#   docker compose up -d        # UI: http://localhost:8123
+#   docker compose logs -f homeassistant
+#   docker compose restart homeassistant   # after code changes
+#   docker compose down         # keep state;  rm -rf .ha-config to reset
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:${HA_VERSION:-stable}
+    pull_policy: always   # re-check the registry on every `up`, so a stale local tag can't linger
+    container_name: ha-simplygreen-test
+    ports:
+      - "8123:8123"
+    environment:
+      TZ: Europe/Berlin
+    volumes:
+      - ./.ha-config:/config
+      - ./custom_components/simplygreen:/config/custom_components/simplygreen:ro
+      - ./dev/configuration.yaml:/config/configuration.yaml:ro
+    restart: unless-stopped
