@@ -56,8 +56,8 @@ Then: *Settings → Devices & Services → Add Integration → SimplyGreen Lastg
   overwritten, so corrections delivered later end up in the statistics automatically.
 - On the first run, the configured number of days is backfilled in blocks of 7 days.
 - The running sum continues from the last existing hour before the import window.
-- If the portal session expires, the integration logs in again once. If the password
-  is rejected, HA's re-auth flow starts.
+- The integration logs in to the portal on every run. If the password is rejected,
+  HA's re-auth flow starts.
 
 The design decisions, the observed portal protocol and open items are documented in
 **[docs/HANDOVER.md](docs/HANDOVER.md)**.

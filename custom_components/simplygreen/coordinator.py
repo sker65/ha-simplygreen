@@ -117,6 +117,7 @@ class SimplyGreenCoordinator(DataUpdateCoordinator[dict]):
         energy: list = []
         price: list = []
         try:
+            await self.client.login()  # fresh session per run; the portal's expiry is not detectable
             for chunk_start, chunk_end in chunks(start_day, today):
                 payload = await self.client.get_load_profile(self.mliid, chunk_start, chunk_end)
                 energy += to_intervals(series(payload, "Menge"))

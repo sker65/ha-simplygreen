@@ -57,8 +57,8 @@ Danach: *Einstellungen → Geräte & Dienste → Integration hinzufügen → Sim
   in der Statistik.
 - Beim ersten Lauf werden die eingestellten Tage in 7-Tages-Blöcken nachgeladen.
 - Die fortlaufende Summe setzt an der letzten vorhandenen Stunde vor dem Importfenster an.
-- Läuft die Portal-Session ab, meldet sich die Integration einmal neu an. Bei
-  abgelehntem Passwort startet der Re-Auth-Flow von HA.
+- Bei jedem Lauf meldet sich die Integration neu im Portal an. Bei abgelehntem
+  Passwort startet der Re-Auth-Flow von HA.
 
 Die Entwurfsentscheidungen, das beobachtete Portal-Protokoll und offene Punkte
 stehen in **[docs/HANDOVER.md](docs/HANDOVER.md)**.

@@ -121,35 +121,35 @@ class SimplyGreenClient:
         return data
 
     async def get_load_profile(self, mliid: str, start: date, end: date, res: str = "ResOpt1") -> list:
-        """Return the raw series list. ResOpt1 = 15 min, ResOpt2 = 1 h."""
-        for attempt in (0, 1):
-            if self._csrf is None:
-                await self.login()
-            text, url = await self._get(
-                {
-                    "ajaxService": "getLoadProfile",
-                    "ajax": "y",
-                    "startDate": start.strftime("%d.%m.%Y"),
-                    "resOpt": res,
-                    "endDate": end.strftime("%d.%m.%Y"),
-                    "mliids": json.dumps([str(mliid)]),
-                },
-                headers={
-                    "x-csrf-token": self._csrf or "",
-                    "x-requested-with": "XMLHttpRequest",
-                    "referer": f"{BASE_URL}?page=loadprofile",
-                },
-            )
-            try:
-                if _is_logged_out(url):
-                    raise ValueError
-                data = json.loads(text)
-                if not isinstance(data, list):
-                    raise ValueError
-                return data
-            except ValueError:
-                self._csrf = None  # session expired -> log in again once
-        raise SimplyGreenError("Unexpected response from getLoadProfile")
+        """Return the raw series list. ResOpt1 = 15 min, ResOpt2 = 1 h. Requires login().
+
+        The portal answers an expired session with 200 and [] - the same as a range
+        without data - so callers log in before every update instead of reusing a session.
+        """
+        if self._csrf is None:
+            raise SimplyGreenError("Not logged in")
+        text, url = await self._get(
+            {
+                "ajaxService": "getLoadProfile",
+                "ajax": "y",
+                "startDate": start.strftime("%d.%m.%Y"),
+                "resOpt": res,
+                "endDate": end.strftime("%d.%m.%Y"),
+                "mliids": json.dumps([str(mliid)]),
+            },
+            headers={
+                "x-csrf-token": self._csrf,
+                "x-requested-with": "XMLHttpRequest",
+                "referer": f"{BASE_URL}?page=loadprofile",
+            },
+        )
+        try:
+            data = None if _is_logged_out(url) else json.loads(text)
+        except ValueError:
+            data = None
+        if not isinstance(data, list):
+            raise SimplyGreenError("Unexpected response from getLoadProfile")
+        return data
 
 
 def series(payload: list, line_desc: str) -> list[tuple[int, float]]:

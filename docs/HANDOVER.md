@@ -94,12 +94,14 @@ Umgesetzt in `api.to_intervals()`.
 
 ### 2.4 Session-Ablauf
 
-- Ohne gültige Session leitet das Portal auf `?page=expired` um („Sitzung
-  abgelaufen“, HTML mit Status 200). Ein AJAX-Aufruf liefert dann HTML statt JSON.
-- Der Client erkennt das an der Ziel-URL oder an einer Antwort, die kein JSON ist.
-  Er meldet sich **einmal** neu an und versucht es erneut.
-- Wie lange eine Session hält, ist unbekannt. Wegen des 3-h-Intervalls ist
-  wahrscheinlich bei jedem Lauf ein neuer Login fällig, was so gewollt ist.
+- Im Browser leitet das Portal ohne gültige Session auf `?page=expired` um
+  („Sitzung abgelaufen“, HTML mit Status 200).
+- `getLoadProfile` antwortet bei abgelaufener Session aber mit **Status 200 und `[]`**
+  (beobachtet am 03.10.2026). Das ist nicht von einem Zeitraum ohne Daten zu
+  unterscheiden: Auch z. B. „heute bis heute“ liefert `[]`.
+- Deshalb gibt es keine Session-Wiederverwendung: Der Coordinator meldet sich **bei
+  jedem Lauf** neu an (`client.login()`), danach folgen die Abrufe. Bei einem Lauf
+  alle 3 h sind das ein paar zusätzliche Requests.
 
 ## 3. Unverifizierte Annahmen (zuerst gegen das echte Portal prüfen)
 
@@ -185,7 +187,7 @@ unbekannt, und so ist es robuster.
 |---|---|
 | `tests/test_parsing.py` | Zeitstempel-Semantik an echten Daten, Stundensumme (0,308 kWh), Zeitumstellung (100 Intervalle, lückenlos), unvollständiger Tag, CSRF-Regex |
 | `tests/test_stats.py` | Abruffenster (Backfill, lokales Datum), Blöcke zu 7 Tagen, Zusammenführen, Summenfortschreibung, Zeitumstellungstage (25/23 Stunden), Preis-Buckets, Tageszusammenfassung inkl. gewichtetem Durchschnittspreis |
-| `tests/test_client.py` | Login, abgelehntes Passwort, `mliid`-Erkennung, Abruf, Neu-Login nach abgelaufener Session, gegen einen lokalen aiohttp-Mock |
+| `tests/test_client.py` | Login, abgelehntes Passwort, `mliid`-Erkennung, Abruf, abgelaufene Session (Umleitung bzw. `[]`) und Abruf nach erneutem Login, gegen einen lokalen aiohttp-Mock |
 
 **Bewusst nicht getestet:** `coordinator.py`, `sensor.py`, `config_flow.py`. Die Logik
 steckt in `stats.py`, der Rest ist dünne HA-Anbindung (Tests dafür bräuchten

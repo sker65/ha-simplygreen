@@ -11,7 +11,10 @@ from aiohttp import web
 MET_LINES = json.loads((Path(__file__).parent / "fixtures" / "met_lines.json").read_text())
 
 
-def _mock_app(payload):
+def _mock_app(payload, expired="redirect"):
+    # expired: how getLoadProfile answers without a valid session.
+    #   "redirect" -> 302 to page=expired (seen in the browser)
+    #   "empty"    -> 200 with [] (seen from the real portal, 03.10.2026)
     async def handler(req):
         q = req.query
         if req.method == "POST":
@@ -39,6 +42,8 @@ def _mock_app(payload):
             return web.json_response(MET_LINES)
         if q.get("ajaxService") == "getLoadProfile":
             if req.cookies.get("auth_x") != "SESSION" or req.headers.get("x-csrf-token") != "tok2":
+                if expired == "empty":
+                    return web.json_response([])
                 raise web.HTTPFound("/index.php?page=expired")
             assert json.loads(q["mliids"]) == ["1234567"]
             assert q["startDate"] == "01.10.2026" and q["resOpt"] == "ResOpt1"
@@ -50,8 +55,8 @@ def _mock_app(payload):
     return app
 
 
-async def _run(sg_api, payload):
-    runner = web.AppRunner(_mock_app(payload))
+async def _run(sg_api, payload, expired="redirect"):
+    runner = web.AppRunner(_mock_app(payload, expired))
     await runner.setup()
     site = web.TCPSite(runner, "127.0.0.1", 0)
     await site.start()
@@ -67,10 +72,21 @@ async def _run(sg_api, payload):
                 results["bad_login"] = "rejected"
         async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True)) as s:
             c = sg_api.SimplyGreenClient(s, "u", "pw")
-            results["first"] = await c.get_load_profile("1234567", date(2026, 10, 1), date(2026, 10, 2))
+            try:
+                await c.get_load_profile("1234567", date(2026, 10, 1), date(2026, 10, 2))
+                results["without_login"] = "accepted"
+            except sg_api.SimplyGreenError:
+                results["without_login"] = "rejected"
+            await c.login()
             results["mliid"] = c.discovered_mliid
+            results["first"] = await c.get_load_profile("1234567", date(2026, 10, 1), date(2026, 10, 2))
             s.cookie_jar.clear()  # simulate session expiry
-            results["after_expiry"] = await c.get_load_profile("1234567", date(2026, 10, 1), date(2026, 10, 2))
+            try:
+                results["expired"] = await c.get_load_profile("1234567", date(2026, 10, 1), date(2026, 10, 2))
+            except sg_api.SimplyGreenError:
+                results["expired"] = "error"
+            await c.login()  # what the coordinator does on every run
+            results["after_relogin"] = await c.get_load_profile("1234567", date(2026, 10, 1), date(2026, 10, 2))
     finally:
         await runner.cleanup()
     return results
@@ -79,11 +95,21 @@ async def _run(sg_api, payload):
 def test_login_fetch_and_relogin(sg_api, payload_15min):
     r = asyncio.run(_run(sg_api, payload_15min))
     assert r["bad_login"] == "rejected"
-    assert len(r["first"]) == 2
+    assert r["without_login"] == "rejected"
     assert r["mliid"] == "1234567"
-    assert len(r["after_expiry"]) == 2
+    assert len(r["first"]) == 2
+    assert r["expired"] == "error"  # redirect to page=expired is detected
+    assert len(r["after_relogin"]) == 2
+
+
+def test_expired_session_answering_empty_list_is_fixed_by_relogin(sg_api, payload_15min):
+    # The real portal answers an expired session with [] - indistinguishable from "no data".
+    r = asyncio.run(_run(sg_api, payload_15min, expired="empty"))
+    assert r["expired"] == []
+    assert len(r["after_relogin"]) == 2
 
 
 def test_parse_mliids(sg_api):
     assert sg_api.parse_mliids(MET_LINES) == ["1234567"]
     assert sg_api.parse_mliids([{"Lines": [{"Type": "OTHER", "MliId": "1"}]}, {}]) == []
+
