@@ -77,6 +77,10 @@ Antwort: JSON-Array mit zwei Serien:
 
 - Die Serien werden über **`LineDesc`** erkannt (`"Menge"` / `"EPEX"`). Die
   `mliid` der EPEX-Serie ist eine feste Börsen-ID und nicht die des Kunden.
+- Seit 04.10.2026 kommt eine dritte Serie `"Kosten"` (`type` `B1`, `LineUnit`
+  `Euro`). Sie ist exakt `Menge × EPEX / 1000`, also die Netto-Börsenkosten ohne
+  Aufschlag und MwSt, und erscheint später als der Verbrauch. Die Integration nutzt
+  sie nicht (siehe E11).
 - Im Repo liegt eine echte, anonymisierte Antwort: `tests/fixtures/load_profile_15min.json`.
 
 ### 2.3 Zeitstempel – wichtigste Erkenntnis
@@ -181,12 +185,20 @@ Rechnung.
 **E10 – Login-Erfolg indirekt prüfen** (Abschnitt 2.1). Das Antwortformat ist
 unbekannt, und so ist es robuster.
 
+**E11 – Kosten selbst berechnen.** `simplygreen:kosten_<mliid>` (€, Summe) und
+`simplygreen:preis_<mliid>` (ct/kWh, Mittel/Min/Max) werden aus Menge × EPEX
+berechnet: Endpreis = (EPEX + Aufschlag) × (1 + MwSt). Die Portal-Serie `Kosten`
+liefert denselben Nettowert, kommt aber später; so sind die Kosten da, sobald der
+Verbrauch da ist. Aufschlag (netto, ct/kWh) und MwSt (%) stehen im Config Entry und
+lassen sich per Options Flow ändern (`OptionsFlowWithReload`). Eine Änderung wirkt
+nur auf neu importierte Stunden, ältere behalten ihren Preis. Der Grundpreis fehlt.
+
 ## 5. Tests
 
 | Datei | Prüft |
 |---|---|
 | `tests/test_parsing.py` | Zeitstempel-Semantik an echten Daten, Stundensumme (0,308 kWh), Zeitumstellung (100 Intervalle, lückenlos), unvollständiger Tag, CSRF-Regex |
-| `tests/test_stats.py` | Abruffenster (Backfill, lokales Datum), Blöcke zu 7 Tagen, Zusammenführen, Summenfortschreibung, Zeitumstellungstage (25/23 Stunden), Preis-Buckets, Tageszusammenfassung inkl. gewichtetem Durchschnittspreis |
+| `tests/test_stats.py` | Abruffenster (Backfill, lokales Datum), Blöcke zu 7 Tagen, Zusammenführen, Summenfortschreibung, Zeitumstellungstage (25/23 Stunden), Preis-Buckets, Tageszusammenfassung inkl. gewichtetem Durchschnittspreis, Endpreis mit Aufschlag und MwSt, Kosten je Stunde (u. a. Abgleich mit der Portal-Serie `Kosten`) |
 | `tests/test_client.py` | Login, abgelehntes Passwort, `mliid`-Erkennung, Abruf, abgelaufene Session (Umleitung bzw. `[]`) und Abruf nach erneutem Login, gegen einen lokalen aiohttp-Mock |
 
 **Bewusst nicht getestet:** `coordinator.py`, `sensor.py`, `config_flow.py`. Die Logik
@@ -197,24 +209,20 @@ Docker-HA (`docker-compose.yml`): Setup, Abruf und Statistik-Import ohne Fehler 
 
 ## 6. Roadmap / offene Punkte (priorisiert)
 
-1. **Kosten-Statistik:** `simplygreen:kosten_<mliid>` in € je Stunde =
-   Σ(kWh × (EPEX + Aufschlag)). Der Aufschlag (Netzentgelte, Umlagen, Steuern,
-   Marge) kommt per **Options Flow** in ct/kWh, ggf. mit MwSt.-Faktor. Damit lässt
-   sich die Statistik als `stat_cost` im Energie-Dashboard nutzen.
-2. **Options Flow** für Historie, Aufschlag und Abrufintervall (derzeit nur über
-   die Daten des Config Entry).
-3. **ResOpt3 (Tag) prüfen** und gegebenenfalls zur Plausibilisierung nutzen (Summe
+1. **Options Flow erweitern** um Historie und Abrufintervall (Aufschlag und MwSt
+   sind schon drin).
+2. **ResOpt3 (Tag) prüfen** und gegebenenfalls zur Plausibilisierung nutzen (Summe
    der Tageswerte gegen die Summe der 15-min-Werte).
-4. **Zeitumstellung 25.10.2026 verifizieren** (A6) und die echte Antwort als
+3. **Zeitumstellung 25.10.2026 verifizieren** (A6) und die echte Antwort als
    Fixture ablegen.
-5. **Tests für den Coordinator** mit `pytest-homeassistant-custom-component`
+4. **Tests für den Coordinator** mit `pytest-homeassistant-custom-component`
    (Summenfortschreibung, Re-Import, Tageszusammenfassung).
-6. **`diagnostics.py`** mit geschwärzten Zugangsdaten und letzter Rohantwort,
+5. **`diagnostics.py`** mit geschwärzten Zugangsdaten und letzter Rohantwort,
    hilfreich für Issues.
-7. Optional: Preisvorschau. Das Portal liefert nur vergangene EPEX-Werte. Für die
+6. Optional: Preisvorschau. Das Portal liefert nur vergangene EPEX-Werte. Für die
    Zukunft gibt es eigene Integrationen (z. B. EPEX Spot, Nordpool), das bleibt
    außerhalb des Umfangs.
-8. Optional: HACS-Default-Repository und Brands-Eintrag (`ignore: brands` in CI
+7. Optional: HACS-Default-Repository und Brands-Eintrag (`ignore: brands` in CI
    entfernen).
 
 ## 7. Sicherheit

@@ -15,6 +15,8 @@ calls as the portal's web interface.
 |---|---|---|
 | Statistic | `simplygreen:netzbezug_<mliid>` | Grid consumption in kWh, hourly, with a running sum (`has_sum`). Usable in the statistics graph and as a grid consumption source in the Energy dashboard. |
 | Statistic | `simplygreen:epex_<mliid>` | EPEX day-ahead price in ct/kWh, hourly mean/min/max |
+| Statistic | `simplygreen:kosten_<mliid>` | Cost in €, hourly, with a running sum: kWh × final price. Usable as the cost source in the Energy dashboard. |
+| Statistic | `simplygreen:preis_<mliid>` | Final price in ct/kWh = (EPEX + surcharge) × (1 + VAT), hourly mean/min/max |
 | Sensor | `sensor.simplygreen_netzbezug_letzter_tag` | kWh of the last **complete** day; attributes see below |
 | Sensor | `sensor.simplygreen_letzter_messwert` | Timestamp (interval end) of the most recent value delivered |
 
@@ -48,6 +50,12 @@ Then: *Settings → Devices & Services → Add Integration → SimplyGreen Lastg
 | Username / Password | Credentials for mein.simplygreen.de |
 | Metering location ID (`mliid`) | Optional; determined after login via the portal call `getMetLines`. If that fails: in the browser's network tab → request `getLoadProfile` → parameter `mliids`. |
 | History | Days to backfill on first start (default 30) |
+| Surcharge on EPEX, net | ct/kWh you pay on top of the exchange price (grid fees, levies, taxes, margin), without VAT. See your contract or bill. Default 0. |
+| VAT | Percent on EPEX + surcharge, default 19 |
+
+Surcharge and VAT can be changed later under *Devices & services → SimplyGreen → Configure*.
+This applies to new imports and to the last 3 days, which are re-imported on every run.
+Older hours keep the price they were imported with. The monthly base fee is not included.
 
 ## How it works (short version)
 
@@ -70,7 +78,8 @@ and display them like this:
 
 - **"Statistics graph" card:** edit the dashboard → add card → *Statistics graph*, then
   pick the statistic.
-- **Energy dashboard:** *Grid consumption* → choose the statistic as the source.
+- **Energy dashboard:** *Grid consumption* → choose `simplygreen:netzbezug_…` as the source and,
+  for costs, "Use an entity tracking the total costs" with `simplygreen:kosten_…`.
 
 Grid consumption per hour:
 

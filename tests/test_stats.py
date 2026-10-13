@@ -154,3 +154,48 @@ def test_summarize_dst_days_count_as_complete(sg_stats, sg_api):
 
 def test_summarize_no_data(sg_stats, sg_api):
     assert sg_stats.summarize([], [], sg_api.TZ) == {"day": None, "last_point": None}
+
+
+# --- final price / cost ---------------------------------------------------------
+
+def test_final_price_adds_surcharge_and_vat(sg_stats):
+    # 200 EUR/MWh = 20 ct/kWh; + 10 ct surcharge = 30 ct net; + 19 % VAT = 35.7 ct
+    assert round(sg_stats.final_price_ct(200.0, 10.0, 19.0), 6) == 35.7
+    assert sg_stats.final_price_ct(200.0, 0.0, 0.0) == 20.0
+
+
+def test_final_price_with_negative_epex(sg_stats):
+    assert round(sg_stats.final_price_ct(-50.0, 20.0, 0.0), 6) == 15.0
+
+
+def test_cost_stats_sums_hourly_cost_with_running_sum(sg_stats, sg_api):
+    energy = _day(sg_api, date(2026, 10, 1), [0.5] * 8)  # 2 kWh per hour
+    price = [(t, 200.0) for t, _ in energy]
+    rows = sg_stats.cost_stats(energy, price, 10.0, 19.0, 1.0)
+    # 2 kWh x 35.7 ct = 0.714 EUR per hour
+    assert [r["sum"] for r in rows] == [1.714, 2.428]
+    assert all(r["state"] == r["sum"] and r["start"].minute == 0 for r in rows)
+
+
+def test_cost_stats_without_surcharge_matches_portal_cost_series(sg_stats, sg_api, payload_15min):
+    # The portal's own "Kosten" series is exactly kWh x EPEX (net, EUR).
+    energy = sg_api.to_intervals(sg_api.series(payload_15min, "Menge"))
+    price = sg_api.to_intervals(sg_api.series(payload_15min, "EPEX"))
+    rows = sg_stats.cost_stats(energy, price, 0.0, 0.0, 0.0)
+    expected = sum(k * dict(price)[t] / 1000 for t, k in energy)
+    assert len(rows) == 24
+    assert abs(rows[-1]["sum"] - expected) < 1e-3
+
+
+def test_cost_stats_skips_intervals_without_price(sg_stats, sg_api):
+    energy = _day(sg_api, date(2026, 10, 1), [1.0] * 8)
+    price = [(energy[0][0], 100.0)]  # only the very first interval has a price
+    rows = sg_stats.cost_stats(energy, price, 0.0, 0.0, 0.0)
+    assert len(rows) == 1 and rows[0]["sum"] == 0.1
+
+
+def test_final_price_stats(sg_stats):
+    t = datetime(2026, 10, 1, 10, 0, tzinfo=UTC)
+    iv = [(t + timedelta(minutes=15 * i), p) for i, p in enumerate([100.0, 300.0])]
+    (row,) = sg_stats.final_price_stats(iv, 10.0, 0.0)
+    assert row == {"start": t, "mean": 30.0, "min": 20.0, "max": 40.0}

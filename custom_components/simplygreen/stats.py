@@ -65,6 +65,46 @@ def price_stats(intervals: list[tuple[datetime, float]]) -> list[dict]:
     ]
 
 
+def final_price_ct(eur_mwh: float, surcharge_ct: float, vat_percent: float) -> float:
+    """Price per kWh on the bill: (EPEX + surcharge) incl. VAT, in ct/kWh."""
+    return (eur_mwh / 10 + surcharge_ct) * (1 + vat_percent / 100)
+
+
+def cost_stats(
+    energy: list[tuple[datetime, float]],
+    price: list[tuple[datetime, float]],
+    surcharge_ct: float,
+    vat_percent: float,
+    base_sum: float,
+) -> list[dict]:
+    """Hourly cost in EUR (kWh x final price) with a running sum from `base_sum`.
+
+    Intervals without a price are skipped; an hour without any price gets no row.
+    """
+    prices = dict(price)
+    buckets: dict[datetime, float] = {}
+    for start, kwh in energy:
+        if start in prices:
+            hour = start.replace(minute=0, second=0, microsecond=0)
+            eur = kwh * final_price_ct(prices[start], surcharge_ct, vat_percent) / 100
+            buckets[hour] = buckets.get(hour, 0.0) + eur
+    running = base_sum
+    rows = []
+    for hour, eur in sorted(buckets.items()):
+        running += eur
+        rows.append({"start": hour, "state": round(running, 4), "sum": round(running, 4)})
+    return rows
+
+
+def final_price_stats(
+    price: list[tuple[datetime, float]], surcharge_ct: float, vat_percent: float
+) -> list[dict]:
+    """Hourly mean/min/max of the final price in ct/kWh."""
+    return price_stats(
+        [(start, final_price_ct(eur_mwh, surcharge_ct, vat_percent) * 10) for start, eur_mwh in price]
+    )
+
+
 def summarize(energy: list[tuple[datetime, float]], price: list[tuple[datetime, float]], tz: tzinfo) -> dict:
     """15-min profile of the most recent complete local day."""
     last_point = energy[-1][0] + QUARTER if energy else None

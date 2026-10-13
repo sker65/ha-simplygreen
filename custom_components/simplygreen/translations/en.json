@@ -9,7 +9,13 @@
           "username": "Username",
           "password": "Password",
           "mliid": "Metering location ID (mliid, optional)",
-          "backfill_days": "History to import on first run (days)"
+          "backfill_days": "History to import on first run (days)",
+          "surcharge_ct": "Surcharge on EPEX, net (ct/kWh)",
+          "vat_percent": "VAT (%)"
+        },
+        "data_description": {
+          "surcharge_ct": "Everything you pay per kWh on top of the exchange price, without VAT: grid fees, levies, taxes and the supplier margin. See your contract or bill.",
+          "vat_percent": "Applied to EPEX price plus surcharge. 19 % in Germany."
         }
       },
       "reauth_confirm": {
@@ -27,6 +33,22 @@
     "abort": {
       "already_configured": "This metering location is already configured",
       "reauth_successful": "Credentials updated"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Prices",
+        "description": "Used for the cost and final price statistics. Changes apply to new imports and to the last 3 days, which are re-imported on every run.",
+        "data": {
+          "surcharge_ct": "Surcharge on EPEX, net (ct/kWh)",
+          "vat_percent": "VAT (%)"
+        },
+        "data_description": {
+          "surcharge_ct": "Everything you pay per kWh on top of the exchange price, without VAT: grid fees, levies, taxes and the supplier margin. See your contract or bill.",
+          "vat_percent": "Applied to EPEX price plus surcharge. 19 % in Germany."
+        }
+      }
     }
   },
   "entity": {

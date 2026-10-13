@@ -24,11 +24,25 @@ from .api import (
     series,
     to_intervals,
 )
-from .stats import chunks, energy_stats, first_hour, merge, price_stats, summarize, window_start
+from .stats import (
+    chunks,
+    cost_stats,
+    energy_stats,
+    final_price_stats,
+    first_hour,
+    merge,
+    price_stats,
+    summarize,
+    window_start,
+)
 from .const import (
     CONF_BACKFILL_DAYS,
     CONF_MLIID,
+    CONF_SURCHARGE_CT,
+    CONF_VAT_PERCENT,
     DEFAULT_BACKFILL_DAYS,
+    DEFAULT_SURCHARGE_CT,
+    DEFAULT_VAT_PERCENT,
     DOMAIN,
     REFETCH_DAYS,
     UPDATE_HOURS,
@@ -39,8 +53,18 @@ _LOGGER = logging.getLogger(__name__)
 
 # Statistic names are stored in the recorder metadata and cannot use translation files.
 _STAT_NAMES = {
-    "de": {"energy": "SimplyGreen Netzbezug", "price": "SimplyGreen EPEX-Preis"},
-    "en": {"energy": "SimplyGreen grid import", "price": "SimplyGreen EPEX price"},
+    "de": {
+        "energy": "SimplyGreen Netzbezug",
+        "price": "SimplyGreen EPEX-Preis",
+        "cost": "SimplyGreen Kosten",
+        "final_price": "SimplyGreen Endpreis",
+    },
+    "en": {
+        "energy": "SimplyGreen grid import",
+        "price": "SimplyGreen EPEX price",
+        "cost": "SimplyGreen cost",
+        "final_price": "SimplyGreen final price",
+    },
 }
 
 
@@ -75,9 +99,15 @@ class SimplyGreenCoordinator(DataUpdateCoordinator[dict]):
         self.mliid: str = entry.data[CONF_MLIID]
         self.energy_id = f"{DOMAIN}:netzbezug_{self.mliid}"
         self.price_id = f"{DOMAIN}:epex_{self.mliid}"
+        self.cost_id = f"{DOMAIN}:kosten_{self.mliid}"
+        self.final_price_id = f"{DOMAIN}:preis_{self.mliid}"
         self._backfill_days = entry.options.get(
             CONF_BACKFILL_DAYS, entry.data.get(CONF_BACKFILL_DAYS, DEFAULT_BACKFILL_DAYS)
         )
+        # options (changed later via the options flow) win over the initial setup values
+        settings = {**entry.data, **entry.options}
+        self._surcharge_ct = float(settings.get(CONF_SURCHARGE_CT, DEFAULT_SURCHARGE_CT))
+        self._vat_percent = float(settings.get(CONF_VAT_PERCENT, DEFAULT_VAT_PERCENT))
 
     async def _recorder(self, func, *args):
         return await get_instance(self.hass).async_add_executor_job(func, self.hass, *args)
@@ -90,17 +120,17 @@ class SimplyGreenCoordinator(DataUpdateCoordinator[dict]):
         start = rows[0]["start"]
         return datetime.fromtimestamp(start, timezone.utc) if isinstance(start, (int, float)) else start
 
-    async def _sum_before(self, hour: datetime) -> float:
+    async def _sum_before(self, statistic_id: str, hour: datetime) -> float:
         rows = await self._recorder(
             statistics_during_period,
             hour - timedelta(days=90),
             hour,
-            {self.energy_id},
+            {statistic_id},
             "hour",
             None,
             {"sum"},
         )
-        data = rows.get(self.energy_id) or []
+        data = rows.get(statistic_id) or []
         return float(data[-1]["sum"] or 0.0) if data else 0.0
 
     async def _async_update_data(self) -> dict:
@@ -147,7 +177,7 @@ class SimplyGreenCoordinator(DataUpdateCoordinator[dict]):
 
     async def _import(self, energy: list, price: list) -> None:
         names = _STAT_NAMES.get(self.hass.config.language.split("-")[0], _STAT_NAMES["en"])
-        e_stats = energy_stats(energy, await self._sum_before(first_hour(energy)))
+        e_stats = energy_stats(energy, await self._sum_before(self.energy_id, first_hour(energy)))
         async_add_external_statistics(
             self.hass,
             _metadata(self.energy_id, names["energy"], "kWh", has_sum=True, mean=False),
@@ -161,3 +191,23 @@ class SimplyGreenCoordinator(DataUpdateCoordinator[dict]):
                 _metadata(self.price_id, names["price"], "ct/kWh", has_sum=False, mean=True),
                 p_stats,
             )
+            async_add_external_statistics(
+                self.hass,
+                _metadata(self.final_price_id, names["final_price"], "ct/kWh", has_sum=False, mean=True),
+                final_price_stats(price, self._surcharge_ct, self._vat_percent),
+            )
+            has_price = dict(price)
+            priced = [(start, kwh) for start, kwh in energy if start in has_price]
+            if priced:
+                c_stats = cost_stats(
+                    energy,
+                    price,
+                    self._surcharge_ct,
+                    self._vat_percent,
+                    await self._sum_before(self.cost_id, first_hour(priced)),
+                )
+                async_add_external_statistics(
+                    self.hass,
+                    _metadata(self.cost_id, names["cost"], "EUR", has_sum=True, mean=False),
+                    c_stats,
+                )

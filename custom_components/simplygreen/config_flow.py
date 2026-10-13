@@ -7,12 +7,28 @@ from typing import Any
 import aiohttp
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlowWithReload,
+)
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import callback
+from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .api import SimplyGreenAuthError, SimplyGreenClient, SimplyGreenError
-from .const import CONF_BACKFILL_DAYS, CONF_MLIID, DEFAULT_BACKFILL_DAYS, DOMAIN
+from .const import (
+    CONF_BACKFILL_DAYS,
+    CONF_MLIID,
+    CONF_SURCHARGE_CT,
+    CONF_VAT_PERCENT,
+    DEFAULT_BACKFILL_DAYS,
+    DEFAULT_SURCHARGE_CT,
+    DEFAULT_VAT_PERCENT,
+    DOMAIN,
+)
 
 
 # Config entry titles are plain strings and cannot be translated by HA, so pick one here.
@@ -22,8 +38,35 @@ _ENTRY_TITLES = {
 }
 
 
+def _price_schema(defaults: Mapping[str, Any]) -> dict:
+    """Surcharge and VAT fields, shared by the setup and the options flow."""
+    return {
+        vol.Required(
+            CONF_SURCHARGE_CT, default=defaults.get(CONF_SURCHARGE_CT, DEFAULT_SURCHARGE_CT)
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0, max=100, step=0.01, unit_of_measurement="ct/kWh",
+                mode=selector.NumberSelectorMode.BOX,
+            )
+        ),
+        vol.Required(
+            CONF_VAT_PERCENT, default=defaults.get(CONF_VAT_PERCENT, DEFAULT_VAT_PERCENT)
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0, max=100, step=0.1, unit_of_measurement="%",
+                mode=selector.NumberSelectorMode.BOX,
+            )
+        ),
+    }
+
+
 class SimplyGreenConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> SimplyGreenOptionsFlow:
+        return SimplyGreenOptionsFlow()
 
     async def _try_login(self, username: str, password: str) -> SimplyGreenClient:
         session = async_create_clientsession(self.hass, cookie_jar=aiohttp.CookieJar())
@@ -62,6 +105,7 @@ class SimplyGreenConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_BACKFILL_DAYS, default=DEFAULT_BACKFILL_DAYS): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=730)
                 ),
+                **_price_schema({}),
             }
         )
         return self.async_show_form(
@@ -92,3 +136,13 @@ class SimplyGreenConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
             errors=errors,
         )
+
+
+class SimplyGreenOptionsFlow(OptionsFlowWithReload):
+    """Change surcharge and VAT later; the entry reloads automatically."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+        current = {**self.config_entry.data, **self.config_entry.options}
+        return self.async_show_form(step_id="init", data_schema=vol.Schema(_price_schema(current)))

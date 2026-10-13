@@ -15,6 +15,8 @@ dieselben AJAX-Aufrufe wie die Weboberfläche des Portals.
 |---|---|---|
 | Statistik | `simplygreen:netzbezug_<mliid>` | Netzbezug in kWh, stündlich, mit fortlaufender Summe (`has_sum`). Nutzbar im Statistik-Diagramm und als Netzbezugsquelle im Energie-Dashboard. |
 | Statistik | `simplygreen:epex_<mliid>` | EPEX-Day-Ahead-Preis in ct/kWh, Stundenmittel/-min/-max |
+| Statistik | `simplygreen:kosten_<mliid>` | Kosten in €, stündlich, mit fortlaufender Summe: kWh × Endpreis. Nutzbar als Kostenquelle im Energie-Dashboard. |
+| Statistik | `simplygreen:preis_<mliid>` | Endpreis in ct/kWh = (EPEX + Aufschlag) × (1 + MwSt), Stundenmittel/-min/-max |
 | Sensor | `sensor.simplygreen_netzbezug_letzter_tag` | kWh des letzten **vollständigen** Tages; Attribute siehe unten |
 | Sensor | `sensor.simplygreen_letzter_messwert` | Zeitpunkt (Intervallende) des jüngsten gelieferten Werts |
 
@@ -48,6 +50,13 @@ Danach: *Einstellungen → Geräte & Dienste → Integration hinzufügen → Sim
 | Benutzername / Passwort | Zugangsdaten für mein.simplygreen.de |
 | Messlokations-ID (`mliid`) | optional; wird nach dem Login über den Portal-Aufruf `getMetLines` ermittelt. Falls das fehlschlägt: im Browser Netzwerk-Tab → Request `getLoadProfile` → Parameter `mliids`. |
 | Historie | Tage, die beim ersten Start nachgeladen werden (Standard 30) |
+| Aufschlag auf EPEX, netto | ct/kWh, die zusätzlich zum Börsenpreis anfallen (Netzentgelte, Umlagen, Steuern, Marge), ohne MwSt. Steht im Vertrag bzw. auf der Rechnung. Standard 0. |
+| Mehrwertsteuer | Prozent auf EPEX + Aufschlag, Standard 19 |
+
+Aufschlag und MwSt lassen sich später unter *Geräte & Dienste → SimplyGreen → Konfigurieren*
+ändern. Das gilt für neue Importe und für die letzten 3 Tage, die bei jedem Lauf neu
+importiert werden. Ältere Stunden behalten den Preis, mit dem sie importiert wurden.
+Der monatliche Grundpreis ist nicht enthalten.
 
 ## Funktionsweise (Kurzfassung)
 
@@ -71,7 +80,8 @@ Statistik* und kannst sie so anzeigen:
 
 - **Karte „Statistikdiagramm“:** Dashboard bearbeiten → Karte hinzufügen →
   *Statistikdiagramm*, dann die Statistik auswählen.
-- **Energie-Dashboard:** *Netzbezug* → die Statistik als Quelle wählen.
+- **Energie-Dashboard:** *Netzbezug* → `simplygreen:netzbezug_…` als Quelle wählen und bei
+  den Kosten „Entität verwenden, die die Gesamtkosten erfasst“ mit `simplygreen:kosten_…`.
 
 Netzbezug je Stunde:
 

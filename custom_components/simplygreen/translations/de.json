@@ -9,7 +9,13 @@
           "username": "Benutzername",
           "password": "Passwort",
           "mliid": "Messlokations-ID (mliid, optional)",
-          "backfill_days": "Historie beim ersten Import (Tage)"
+          "backfill_days": "Historie beim ersten Import (Tage)",
+          "surcharge_ct": "Aufschlag auf EPEX, netto (ct/kWh)",
+          "vat_percent": "Mehrwertsteuer (%)"
+        },
+        "data_description": {
+          "surcharge_ct": "Alles, was pro kWh zusätzlich zum Börsenpreis anfällt, ohne MwSt: Netzentgelte, Umlagen, Steuern und die Marge des Versorgers. Steht im Vertrag bzw. auf der Rechnung.",
+          "vat_percent": "Wird auf EPEX-Preis plus Aufschlag gerechnet. In Deutschland 19 %."
         }
       },
       "reauth_confirm": {
@@ -27,6 +33,22 @@
     "abort": {
       "already_configured": "Diese Messlokation ist bereits eingerichtet",
       "reauth_successful": "Anmeldung aktualisiert"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Preise",
+        "description": "Grundlage für die Statistiken Kosten und Endpreis. Änderungen gelten für neue Importe und für die letzten 3 Tage, die bei jedem Lauf neu importiert werden.",
+        "data": {
+          "surcharge_ct": "Aufschlag auf EPEX, netto (ct/kWh)",
+          "vat_percent": "Mehrwertsteuer (%)"
+        },
+        "data_description": {
+          "surcharge_ct": "Alles, was pro kWh zusätzlich zum Börsenpreis anfällt, ohne MwSt: Netzentgelte, Umlagen, Steuern und die Marge des Versorgers. Steht im Vertrag bzw. auf der Rechnung.",
+          "vat_percent": "Wird auf EPEX-Preis plus Aufschlag gerechnet. In Deutschland 19 %."
+        }
+      }
     }
   },
   "entity": {
